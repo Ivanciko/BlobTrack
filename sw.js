@@ -1,6 +1,6 @@
 // Bump this on every deploy so returning visitors pick up the new files instead of
 // being stuck on a stale cached version.
-const CACHE_VERSION = 'blobtrack-v5';
+const CACHE_VERSION = 'blobtrack-v6';
 
 const APP_SHELL = [
   './',

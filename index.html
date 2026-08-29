@@ -763,18 +763,43 @@
       <div>
         <p class="group-label">Estilo</p>
         <div class="field">
-          <div class="field-row"><span class="field-label">Color de cuadrado</span></div>
+          <div class="field-row"><span class="field-label">Marcador</span></div>
+          <div class="select-pills" id="markerStylePills">
+            <button type="button" class="pill active" data-marker="square">Cuadrado</button>
+            <button type="button" class="pill" data-marker="particle">Partícula</button>
+            <button type="button" class="pill" data-marker="none">Ninguno</button>
+          </div>
+        </div>
+        <div class="field" id="markerColorField">
+          <div class="field-row"><span class="field-label">Color de marcador</span></div>
           <div class="swatch-row">
             <input type="color" id="squareColor" value="#3fe8c9" />
             <span class="hex-label" id="squareColorHex">#3FE8C9</span>
           </div>
         </div>
-        <div class="field">
+        <div class="field" id="markerSizeField">
           <div class="field-row">
-            <span class="field-label">Tamaño del cuadrado</span>
+            <span class="field-label">Tamaño de marcador</span>
             <span class="field-value" id="valSquareSize">70</span>
           </div>
           <input type="range" id="squareSize" min="16" max="220" step="2" value="70" />
+        </div>
+        <div class="field">
+          <div class="switch-row">
+            <span class="field-label">Estela</span>
+            <label class="switch">
+              <input type="checkbox" id="trailEnabled" checked />
+              <span class="switch-track"></span>
+            </label>
+          </div>
+          <p class="field-hint">Deja un rastro que se desvanece detrás de cada blob según se mueve.</p>
+        </div>
+        <div class="field" id="trailLengthField">
+          <div class="field-row">
+            <span class="field-label">Longitud de estela</span>
+            <span class="field-value" id="valTrailLength">18</span>
+          </div>
+          <input type="range" id="trailLength" min="4" max="50" step="1" value="18" />
         </div>
         <div class="field">
           <div class="field-row">
@@ -2923,9 +2948,15 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
   const sensitivityEl = document.getElementById('sensitivity');
   const minSizeEl = document.getElementById('minSize');
   const stabilityEl = document.getElementById('stability');
+  const markerStylePills = document.getElementById('markerStylePills');
+  const markerColorField = document.getElementById('markerColorField');
+  const markerSizeField = document.getElementById('markerSizeField');
   const squareColorEl = document.getElementById('squareColor');
   const squareColorHex = document.getElementById('squareColorHex');
   const squareSizeEl = document.getElementById('squareSize');
+  const trailEnabledEl = document.getElementById('trailEnabled');
+  const trailLengthEl = document.getElementById('trailLength');
+  const trailLengthField = document.getElementById('trailLengthField');
   const lineWidthEl = document.getElementById('lineWidth');
   const showCoordsEl = document.getElementById('showCoords');
   const coordColorEl = document.getElementById('coordColor');
@@ -2978,8 +3009,11 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     threshold: 30,
     minAreaFrac: 0.18,
     matchDistFrac: 0.45,
+    markerStyle: 'square',
     squareColor: '#3fe8c9',
     squareSize: 70,
+    trailEnabled: true,
+    trailLength: 18,
     lineWidth: 2,
     showCoords: true,
     coordColor: '#ffffff',
@@ -3019,6 +3053,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     facingMode: 'environment',
     captureOrientation: 'portrait',
     cropRect: null,
+    trails: new Map(),
     liveRecorder: null,
     liveRecordedChunks: [],
     liveRecording: false,
@@ -3059,6 +3094,8 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     params.matchDistFrac = mapStability(+stabilityEl.value);
     params.squareColor = squareColorEl.value;
     params.squareSize = +squareSizeEl.value;
+    params.trailEnabled = trailEnabledEl.checked;
+    params.trailLength = +trailLengthEl.value;
     params.lineWidth = +lineWidthEl.value;
     params.showCoords = showCoordsEl.checked;
     params.coordColor = coordColorEl.value;
@@ -3073,6 +3110,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     valMinSize.textContent = minSizeEl.value;
     valStability.textContent = stabilityEl.value;
     valSquareSize.textContent = squareSizeEl.value;
+    valTrailLength.textContent = trailLengthEl.value;
     valLineWidth.textContent = (+lineWidthEl.value).toFixed(1);
     valLineNetWidth.textContent = (+lineNetWidthEl.value).toFixed(1);
     valGlitchIntensity.textContent = glitchIntensityEl.value;
@@ -3081,6 +3119,13 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     lineNetColorHex.textContent = lineNetColorEl.value.toUpperCase();
     coordColorField.style.opacity = params.showCoords ? '1' : '0.4';
     coordColorEl.disabled = !params.showCoords;
+    trailLengthField.style.opacity = params.trailEnabled ? '1' : '0.4';
+    trailLengthEl.disabled = !params.trailEnabled;
+    const markerActive = params.markerStyle !== 'none';
+    markerColorField.style.opacity = markerActive ? '1' : '0.4';
+    squareColorEl.disabled = !markerActive;
+    markerSizeField.style.opacity = markerActive ? '1' : '0.4';
+    squareSizeEl.disabled = !markerActive;
     lineNetColorField.style.opacity = params.showLines ? '1' : '0.4';
     lineNetColorEl.disabled = !params.showLines;
     lineNetWidthField.style.opacity = params.showLines ? '1' : '0.4';
@@ -3092,7 +3137,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
 
     refreshPausedPreview();
   }
-  [sensitivityEl, minSizeEl, stabilityEl, squareColorEl, squareSizeEl, lineWidthEl, showCoordsEl, coordColorEl, showLinesEl, lineNetColorEl, lineNetWidthEl, glitchEnabledEl, glitchIntensityEl, bwEnabledEl]
+  [sensitivityEl, minSizeEl, stabilityEl, squareColorEl, squareSizeEl, trailEnabledEl, trailLengthEl, lineWidthEl, showCoordsEl, coordColorEl, showLinesEl, lineNetColorEl, lineNetWidthEl, glitchEnabledEl, glitchIntensityEl, bwEnabledEl]
     .forEach(el => el.addEventListener('input', updateFromControls));
   updateFromControls();
 
@@ -3103,6 +3148,15 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
   function refreshPausedPreview(){
     if (!state.playing && video.src && video.readyState >= 2) drawStillFrame();
   }
+
+  markerStylePills.addEventListener('click', (e) => {
+    const btn = e.target.closest('.pill');
+    if (!btn) return;
+    [...markerStylePills.children].forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    params.markerStyle = btn.dataset.marker;
+    updateFromControls();
+  });
 
   bgModePills.addEventListener('click', (e) => {
     const btn = e.target.closest('.pill');
@@ -3481,6 +3535,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     state.background = null;
     state.blobs = [];
     state.nextId = 1;
+    state.trails.clear();
   }
 
   function drawStillFrame(){
@@ -3708,6 +3763,42 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
       }
     }
 
+    // fading trail: a short history of recent positions per tracked blob, drawn as
+    // a line that gets thinner and more transparent the further back in time it
+    // goes. Kept in proc-space (b.cx/b.cy) rather than screen pixels so the same
+    // trail data renders correctly whether this call is the (capped) live preview
+    // or a full-resolution export frame.
+    if (params.trailEnabled){
+      const liveIds = new Set();
+      for (const { b, px, py } of points){
+        liveIds.add(b.id);
+        let trail = state.trails.get(b.id);
+        if (!trail){ trail = []; state.trails.set(b.id, trail); }
+        trail.push({ cx: b.cx, cy: b.cy });
+        while (trail.length > params.trailLength) trail.shift();
+      }
+      for (const id of [...state.trails.keys()]){
+        if (!liveIds.has(id)) state.trails.delete(id);
+      }
+
+      sctx.save();
+      sctx.strokeStyle = params.squareColor;
+      sctx.lineCap = 'round';
+      for (const trail of state.trails.values()){
+        if (trail.length < 2) continue;
+        for (let i = 1; i < trail.length; i++){
+          const t = i / (trail.length - 1); // 0 (oldest) .. 1 (newest)
+          sctx.globalAlpha = t * 0.5;
+          sctx.lineWidth = params.lineWidth * styleScale * (0.3 + t * 0.7);
+          sctx.beginPath();
+          sctx.moveTo(trail[i-1].cx * sx, trail[i-1].cy * sy);
+          sctx.lineTo(trail[i].cx * sx, trail[i].cy * sy);
+          sctx.stroke();
+        }
+      }
+      sctx.restore();
+    }
+
     // dotted mesh connecting every tracked point to every other one
     if (params.showLines && points.length >= 2){
       sctx.save();
@@ -3727,14 +3818,24 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
       sctx.restore();
     }
 
-    // fixed-size square marker + coordinate readout per tracked point
+    // marker (square or particle, or none) + coordinate readout per tracked point
     sctx.lineJoin = 'miter';
     sctx.lineWidth = params.lineWidth * styleScale;
     sctx.strokeStyle = params.squareColor;
+    sctx.fillStyle = params.squareColor;
     sctx.setLineDash([]);
 
     for (const { b, px, py } of points){
-      sctx.strokeRect(px - half, py - half, params.squareSize * styleScale, params.squareSize * styleScale);
+      if (params.markerStyle === 'square'){
+        sctx.strokeRect(px - half, py - half, params.squareSize * styleScale, params.squareSize * styleScale);
+      } else if (params.markerStyle === 'particle'){
+        sctx.fillStyle = params.squareColor;
+        sctx.beginPath();
+        sctx.arc(px, py, half * 0.55, 0, Math.PI * 2);
+        sctx.fill();
+      }
+      // 'none' draws no marker shape at all, but coordinates (below) are independent
+      // of marker style — someone might want the raw numbers with a clean frame.
 
       if (params.showCoords){
         const nx = b.cx * natX, ny = b.cy * natY;
