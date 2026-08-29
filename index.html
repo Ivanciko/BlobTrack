@@ -3573,14 +3573,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
         const fontPx = Math.round(15 * styleScale);
         sctx.font = '600 ' + fontPx + 'px "IBM Plex Mono", monospace';
         sctx.textBaseline = 'top';
-        // a cheap solid backing rect keeps the text legible over any background
-        // without shadowBlur, which is one of the slowest canvas operations and
-        // was a real cost multiplier here (drawn per point, on two canvases,
-        // every single frame).
-        const tw = sctx.measureText(label).width;
         const tx = px - half, ty = py + half + 6 * styleScale;
-        sctx.fillStyle = 'rgba(0,0,0,0.55)';
-        sctx.fillRect(tx - 3*styleScale, ty - 2*styleScale, tw + 6*styleScale, fontPx + 6*styleScale);
         sctx.fillStyle = params.coordColor;
         sctx.fillText(label, tx, ty);
       }
