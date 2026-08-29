@@ -1,5 +1,7 @@
 # BlobTrack
 
+🔗 **App en directo: [ivanciko.github.io/BlobTrack](https://ivanciko.github.io/BlobTrack/)**
+
 **BlobTrack** es una aplicación web que detecta y sigue "blobs" (manchas en movimiento) en un vídeo o en la cámara en directo, al estilo del efecto de *blob tracking* que se usa en TouchDesigner para VJing, instalaciones interactivas o proyección mapeada. Todo el análisis ocurre en el propio navegador, sin servidor: el vídeo nunca sale de tu dispositivo.
 
 ## Qué hace
