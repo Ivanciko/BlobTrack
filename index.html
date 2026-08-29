@@ -13,7 +13,7 @@
 
 <!-- iOS: makes "Añadir a pantalla de inicio" behave like a real standalone app -->
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
 <meta name="apple-mobile-web-app-title" content="BlobTrack" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -72,7 +72,7 @@
     /* extra top padding stacks on top of the 16px above when running fullscreen as an
        installed app on a device with a notch/Dynamic Island; on a normal browser tab
        env() resolves to 0 and this is a no-op */
-    padding-top:calc(16px + env(safe-area-inset-top));
+    padding-top:max(44px, calc(16px + env(safe-area-inset-top)));
     padding-left:calc(24px + env(safe-area-inset-left));
     padding-right:calc(24px + env(safe-area-inset-right));
     border-bottom:1px solid var(--border);
@@ -3018,6 +3018,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     cameraStream: null,
     facingMode: 'environment',
     captureOrientation: 'portrait',
+    cropRect: null,
     liveRecorder: null,
     liveRecordedChunks: [],
     liveRecording: false,
@@ -3381,8 +3382,31 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
   dropzone.addEventListener('drop', (e) => { const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
 
   video.addEventListener('loadedmetadata', () => {
-    const aspect = video.videoWidth / video.videoHeight;
-    state.dispW = Math.min(960, video.videoWidth);
+    const vw = video.videoWidth, vh = video.videoHeight;
+    let aspect = vw / vh;
+    state.cropRect = null;
+
+    if (state.mode === 'camera'){
+      // Mobile browsers (iOS Safari especially) don't reliably hand back a stream
+      // shaped the way our getUserMedia width/height hints asked for — the sensor's
+      // native aspect tends to win regardless, which is what caused the "Vertical/
+      // Horizontal" toggle to seem inverted or ineffective, and the preview to show
+      // up letterboxed with a black bar instead of filling the frame. So instead of
+      // trusting the stream's own shape, always center-crop it in software to
+      // exactly the aspect ratio the user picked — this is what actually guarantees
+      // the toggle works and the preview fills the box edge-to-edge every time.
+      const targetAspect = state.captureOrientation === 'landscape' ? (16/9) : (9/16);
+      aspect = targetAspect;
+      if (vw / vh > targetAspect){
+        const sh = vh, sw = Math.round(vh * targetAspect);
+        state.cropRect = { sx: Math.round((vw - sw) / 2), sy: 0, sw, sh };
+      } else {
+        const sw = vw, sh = Math.round(vw / targetAspect);
+        state.cropRect = { sx: 0, sy: Math.round((vh - sh) / 2), sw, sh };
+      }
+    }
+
+    state.dispW = Math.min(960, vw);
     state.dispH = Math.round(state.dispW / aspect);
     stageCanvas.width = state.dispW;
     stageCanvas.height = state.dispH;
@@ -3598,13 +3622,27 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
   // Draws onto any target canvas/context at any resolution. `styleScale` scales
   // square size, line widths and font so the look stays consistent whether this
   // is the (capped) live preview or a full-resolution export frame.
+  // Draws the current video frame into `ctx` at size w×h, applying state.cropRect
+  // (the centered crop that makes the live camera match the chosen Vertical/
+  // Horizontal orientation) when one is set. Used everywhere the raw frame gets
+  // drawn — the analysis buffer, the live preview, and the B&W "outside" mode —
+  // so the analyzed region, the displayed region, and the recorded region always
+  // agree with each other pixel-for-pixel.
+  function drawVideoFrame(ctx, w, h){
+    const c = state.cropRect;
+    if (c) ctx.drawImage(video, c.sx, c.sy, c.sw, c.sh, 0, 0, w, h);
+    else ctx.drawImage(video, 0, 0, w, h);
+  }
+
   function render(blobs, ctx, w, h, styleScale, scratchCtx){
     styleScale = styleScale || 1;
     const sx = w / state.procW, sy = h / state.procH;
     // coordinate labels are reported in the video's native (source) resolution,
     // like real tracking data would be, not in the downsampled analysis grid.
-    const natX = (video.videoWidth || w) / state.procW;
-    const natY = (video.videoHeight || h) / state.procH;
+    const natW = state.cropRect ? state.cropRect.sw : (video.videoWidth || w);
+    const natH = state.cropRect ? state.cropRect.sh : (video.videoHeight || h);
+    const natX = natW / state.procW;
+    const natY = natH / state.procH;
 
     const scratchCanvas = scratchCtx.canvas;
     if (scratchCanvas.width !== w || scratchCanvas.height !== h){
@@ -3615,7 +3653,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
 
     sctx.clearRect(0,0,w,h);
     if (params.bgMode === 'video'){
-      sctx.drawImage(video, 0, 0, w, h);
+      drawVideoFrame(sctx, w, h);
     } else {
       sctx.fillStyle = '#000';
       sctx.fillRect(0,0,w,h);
@@ -3664,7 +3702,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
           sctx.beginPath();
           sctx.rect(px - half, py - half, half * 2, half * 2);
           sctx.clip();
-          sctx.drawImage(video, 0, 0, w, h);
+          drawVideoFrame(sctx, w, h);
           sctx.restore();
         }
       }
@@ -3785,7 +3823,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
   // Returns the current blob list, or null if the frame couldn't be read yet
   // (e.g. video not ready) so the caller can retry.
   function analyzeCurrentFrame(){
-    procCtx.drawImage(video, 0, 0, state.procW, state.procH);
+    drawVideoFrame(procCtx, state.procW, state.procH);
     let gray;
     try {
       const imgData = procCtx.getImageData(0, 0, state.procW, state.procH);
