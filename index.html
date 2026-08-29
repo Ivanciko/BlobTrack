@@ -61,6 +61,9 @@
 
   /* ---- Top bar ---- */
   .topbar{
+    position:sticky;
+    top:0;
+    z-index:40;
     display:flex;
     align-items:center;
     justify-content:space-between;
@@ -73,7 +76,9 @@
     padding-left:calc(24px + env(safe-area-inset-left));
     padding-right:calc(24px + env(safe-area-inset-right));
     border-bottom:1px solid var(--border);
-    background:linear-gradient(180deg, var(--surface), var(--bg));
+    background:rgba(18,22,27,0.72);
+    backdrop-filter:blur(20px) saturate(180%);
+    -webkit-backdrop-filter:blur(20px) saturate(180%);
   }
   .brand{
     display:flex;
@@ -131,7 +136,7 @@
   @media (max-width: 860px){
     .app{ height:auto; min-height:100vh; overflow:visible; }
     .layout{ grid-template-columns:1fr; overflow:visible; }
-    .stage{ order:1; overflow-y:visible; padding:18px 14px; }
+    .stage{ order:1; overflow-y:visible; padding:12px 0 18px; }
     .sidebar{
       order:2;
       max-height:none;
@@ -142,9 +147,44 @@
     }
     .topbar{ padding:12px 16px; flex-wrap:wrap; row-gap:6px; }
     .brand-sub{ display:none; }
-    .canvas-wrap{ max-height:46vh; }
-    canvas#stageCanvas{ max-height:46vh; }
+    .dropzone-wrap{ padding:0 14px; }
     .dropzone{ padding:40px 20px; }
+
+    /* Edge-to-edge camera/video "viewport", closer to a native camera app than a
+       boxed web widget: the canvas fills the width, and play/record controls float
+       over the bottom of it as a translucent glass bar instead of taking up their
+       own separate row underneath. */
+    .viewport{ max-width:100%; }
+    .canvas-wrap{
+      max-height:min(72vh, 640px);
+      border-radius:0;
+      border-left:none;
+      border-right:none;
+    }
+    canvas#stageCanvas{ max-height:min(72vh, 640px); }
+
+    .transport, .live-controls{
+      position:absolute;
+      left:10px; right:10px; bottom:10px;
+      margin-top:0;
+      z-index:2;
+      padding:10px 14px;
+      border-radius:999px;
+      background:rgba(18,22,27,0.55);
+      border:1px solid rgba(255,255,255,0.08);
+      backdrop-filter:blur(20px) saturate(180%);
+      -webkit-backdrop-filter:blur(20px) saturate(180%);
+      box-shadow:0 12px 30px -10px rgba(0,0,0,0.55);
+    }
+    .transport-btn{
+      background:rgba(255,255,255,0.08);
+      border-color:rgba(255,255,255,0.14);
+    }
+    .record-btn{ background:rgba(255,79,129,0.12); }
+
+    .export-row{ padding:0 14px; }
+    .foot-note{ padding:0 14px; }
+
     .switch{ width:44px; height:26px; }
     .switch-track::after{ width:20px; height:20px; }
     .switch input:checked + .switch-track::after{ transform:translateX(18px); }
@@ -397,6 +437,15 @@
   }
   .dropzone-sub b{ color:var(--text-dim); font-weight:600; }
 
+  .viewport{
+    position:relative;
+    width:100%;
+    max-width:min(1100px, 100%);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+
   .canvas-wrap{
     position:relative;
     width:100%;
@@ -408,6 +457,12 @@
     border:1px solid var(--border);
     box-shadow:0 30px 60px -30px rgba(0,0,0,0.6);
     flex:0 1 auto;
+    /* centers the video/canvas when its own aspect ratio doesn't exactly match the
+       box (e.g. a camera stream that couldn't match the requested orientation) so
+       any leftover space reads as deliberate letterboxing, not a layout bug */
+    display:flex;
+    align-items:center;
+    justify-content:center;
   }
   canvas#stageCanvas{
     display:block;
@@ -816,32 +871,34 @@
         <p class="camera-error" id="cameraError"></p>
       </div>
 
-      <div class="canvas-wrap" id="canvasWrap" style="display:none;">
-        <canvas id="stageCanvas"></canvas>
-        <div class="rec-badge" id="recBadge" style="display:none;"><span class="dot rec"></span>GRABANDO EXPORTACIÓN</div>
-        <div class="rec-badge" id="liveRecBadge" style="display:none;"><span class="dot rec"></span>REC <span id="liveRecTime">00:00</span></div>
-        <div class="hud">
-          <div class="hud-chip"><span>BLOBS</span><span id="hudBlobs">0</span></div>
-          <div class="hud-chip"><span>FPS</span><span id="hudFps">0</span></div>
+      <div class="viewport" id="viewport">
+        <div class="canvas-wrap" id="canvasWrap" style="display:none;">
+          <canvas id="stageCanvas"></canvas>
+          <div class="rec-badge" id="recBadge" style="display:none;"><span class="dot rec"></span>GRABANDO EXPORTACIÓN</div>
+          <div class="rec-badge" id="liveRecBadge" style="display:none;"><span class="dot rec"></span>REC <span id="liveRecTime">00:00</span></div>
+          <div class="hud">
+            <div class="hud-chip"><span>BLOBS</span><span id="hudBlobs">0</span></div>
+            <div class="hud-chip"><span>FPS</span><span id="hudFps">0</span></div>
+          </div>
         </div>
-      </div>
 
-      <div class="transport" id="transport" style="display:none;">
-        <button class="transport-btn" id="playBtn" aria-label="Reproducir">
-          <svg id="playIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-        </button>
-        <input type="range" class="scrub" id="scrub" min="0" max="100" value="0" step="0.1" />
-        <span class="time" id="timeLabel">00:00 / 00:00</span>
-      </div>
+        <div class="transport" id="transport" style="display:none;">
+          <button class="transport-btn" id="playBtn" aria-label="Reproducir">
+            <svg id="playIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <input type="range" class="scrub" id="scrub" min="0" max="100" value="0" step="0.1" />
+          <span class="time" id="timeLabel">00:00 / 00:00</span>
+        </div>
 
-      <div class="live-controls" id="liveControls" style="display:none;">
-        <button class="transport-btn" id="flipCameraBtn" aria-label="Cambiar cámara" title="Cambiar cámara">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
-        </button>
-        <button type="button" class="record-btn" id="recordBtn"><span class="rec-dot"></span>Grabar</button>
-        <button class="transport-btn" id="stopCameraBtn" aria-label="Detener cámara" title="Detener cámara">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg>
-        </button>
+        <div class="live-controls" id="liveControls" style="display:none;">
+          <button class="transport-btn" id="flipCameraBtn" aria-label="Cambiar cámara" title="Cambiar cámara">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          </button>
+          <button type="button" class="record-btn" id="recordBtn"><span class="rec-dot"></span>Grabar</button>
+          <button class="transport-btn" id="stopCameraBtn" aria-label="Detener cámara" title="Detener cámara">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg>
+          </button>
+        </div>
       </div>
 
       <div class="export-row" id="exportRow" style="display:none;">
@@ -3092,9 +3149,18 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     if (state.cameraStream) state.cameraStream.getTracks().forEach(t => t.stop());
 
     let stream;
+    // Request dimensions matching the device's current orientation — forcing a fixed
+    // 1280×720 (landscape) ideal regardless of orientation is what made the preview
+    // come back letterboxed with a black bar down the side on a portrait phone.
+    const isPortrait = window.innerHeight >= window.innerWidth;
+    const longSide = 1280, shortSide = 720;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: {
+          facingMode: { ideal: facingMode },
+          width: { ideal: isPortrait ? shortSide : longSide },
+          height: { ideal: isPortrait ? longSide : shortSide }
+        },
         audio: false
       });
     } catch (err){
