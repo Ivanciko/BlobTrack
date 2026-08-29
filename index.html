@@ -116,17 +116,17 @@
     align-items:center;
   }
   .reset-btn{
-    width:28px; height:28px;
+    width:36px; height:36px;
     border-radius:50%;
-    border:1px solid var(--border-bright);
-    background:var(--surface-2);
-    color:var(--text-dim);
+    border:1.5px solid var(--accent);
+    background:var(--accent-soft);
+    color:var(--accent);
     display:flex;
     align-items:center;
     justify-content:center;
     flex:none;
   }
-  .reset-btn:hover{ border-color:var(--accent); color:var(--accent); }
+  .reset-btn:hover{ background:var(--accent); color:var(--bg); }
   .dot{
     width:6px; height:6px; border-radius:50%;
     background:var(--text-faint);
@@ -737,7 +737,7 @@
     </div>
     <div class="topbar-right">
       <button type="button" class="reset-btn" id="resetBtn" style="display:none;" aria-label="Elegir otro vídeo o volver a la cámara" title="Elegir otro vídeo o volver a la cámara">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
       </button>
       <span id="statusText"><span class="dot" id="statusDot"></span>en espera</span>
     </div>
@@ -3873,15 +3873,21 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
         const nx = b.cx * natX, ny = b.cy * natY;
         const label = nx.toFixed(4) + ', ' + ny.toFixed(4);
         const fontPx = Math.round(15 * styleScale);
-        // Deliberately system fonts only here (not the "IBM Plex Mono" webfont used
-        // elsewhere in the UI): Safari has a known canvas quirk where fillText with a
-        // custom @font-face that hasn't finished downloading yet can render a solid
-        // black block instead of falling back cleanly, until the font finishes
-        // loading. That race is far more likely right when a freshly uploaded video
-        // starts playing than with the camera (whose permission prompt buys the font
-        // extra time), which matches this exactly. System monospace fonts are always
-        // already available, so this sidesteps the race entirely.
-        sctx.font = '600 ' + fontPx + 'px ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+        // Reset canvas state explicitly right before drawing the label — this text
+        // draw happens after several other operations in this same frame (trails,
+        // mesh lines, markers) that touch alpha/shadow/composite-mode, and forcing a
+        // clean slate here means none of that can ever bleed into the text, no
+        // matter what changes upstream in the future.
+        sctx.shadowColor = 'transparent';
+        sctx.shadowBlur = 0;
+        sctx.globalCompositeOperation = 'source-over';
+        sctx.globalAlpha = 1;
+        // Plain "monospace" generic keyword only — not even the SF Mono/Menlo/
+        // Consolas stack, let alone the "IBM Plex Mono" webfont used elsewhere in
+        // the UI. Every browser resolves "monospace" to some real installed font
+        // immediately, no download, no ambiguity, nothing that can ever come back
+        // as a missing-glyph ("tofu") block instead of the actual digits.
+        sctx.font = '600 ' + fontPx + 'px monospace';
         sctx.textBaseline = 'top';
         const tx = px - half, ty = py + half + 6 * styleScale;
         sctx.fillStyle = params.coordColor;
