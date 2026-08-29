@@ -839,6 +839,13 @@
             <span class="hex-label" id="coordColorHex">#FFFFFF</span>
           </div>
         </div>
+        <div class="field" id="coordSizeField">
+          <div class="field-row">
+            <span class="field-label">Tamaño de coordenadas</span>
+            <span class="field-value" id="valCoordSize">15</span>
+          </div>
+          <input type="range" id="coordSize" min="8" max="36" step="1" value="15" />
+        </div>
         <div class="field">
           <div class="switch-row">
             <span class="field-label">Líneas de conexión entre puntos</span>
@@ -2978,6 +2985,8 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
   const coordColorEl = document.getElementById('coordColor');
   const coordColorHex = document.getElementById('coordColorHex');
   const coordColorField = document.getElementById('coordColorField');
+  const coordSizeEl = document.getElementById('coordSize');
+  const coordSizeField = document.getElementById('coordSizeField');
   const showLinesEl = document.getElementById('showLines');
   const lineNetColorEl = document.getElementById('lineNetColor');
   const lineNetColorHex = document.getElementById('lineNetColorHex');
@@ -3001,6 +3010,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
   const valMinSize = document.getElementById('valMinSize');
   const valStability = document.getElementById('valStability');
   const valSquareSize = document.getElementById('valSquareSize');
+  const valCoordSize = document.getElementById('valCoordSize');
   const valLineWidth = document.getElementById('valLineWidth');
   const valLineNetWidth = document.getElementById('valLineNetWidth');
 
@@ -3033,6 +3043,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     lineWidth: 2,
     showCoords: true,
     coordColor: '#ffffff',
+    coordSize: 15,
     showLines: true,
     lineNetColor: '#ffffff',
     lineNetWidth: 1,
@@ -3115,6 +3126,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     params.lineWidth = +lineWidthEl.value;
     params.showCoords = showCoordsEl.checked;
     params.coordColor = coordColorEl.value;
+    params.coordSize = +coordSizeEl.value;
     params.showLines = showLinesEl.checked;
     params.lineNetColor = lineNetColorEl.value;
     params.lineNetWidth = +lineNetWidthEl.value;
@@ -3135,6 +3147,9 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     lineNetColorHex.textContent = lineNetColorEl.value.toUpperCase();
     coordColorField.style.opacity = params.showCoords ? '1' : '0.4';
     coordColorEl.disabled = !params.showCoords;
+    coordSizeField.style.opacity = params.showCoords ? '1' : '0.4';
+    coordSizeEl.disabled = !params.showCoords;
+    valCoordSize.textContent = coordSizeEl.value;
     trailLengthField.style.opacity = params.trailEnabled ? '1' : '0.4';
     trailLengthEl.disabled = !params.trailEnabled;
     const markerActive = params.markerStyle !== 'none';
@@ -3153,7 +3168,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
 
     refreshPausedPreview();
   }
-  [sensitivityEl, minSizeEl, stabilityEl, squareColorEl, squareSizeEl, trailEnabledEl, trailLengthEl, lineWidthEl, showCoordsEl, coordColorEl, showLinesEl, lineNetColorEl, lineNetWidthEl, glitchEnabledEl, glitchIntensityEl, bwEnabledEl]
+  [sensitivityEl, minSizeEl, stabilityEl, squareColorEl, squareSizeEl, trailEnabledEl, trailLengthEl, lineWidthEl, showCoordsEl, coordColorEl, coordSizeEl, showLinesEl, lineNetColorEl, lineNetWidthEl, glitchEnabledEl, glitchIntensityEl, bwEnabledEl]
     .forEach(el => el.addEventListener('input', updateFromControls));
   updateFromControls();
 
@@ -3872,7 +3887,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
       if (params.showCoords){
         const nx = b.cx * natX, ny = b.cy * natY;
         const label = nx.toFixed(4) + ', ' + ny.toFixed(4);
-        const fontPx = Math.round(15 * styleScale);
+        const fontPx = Math.round(params.coordSize * styleScale);
         // Reset canvas state explicitly right before drawing the label — this text
         // draw happens after several other operations in this same frame (trails,
         // mesh lines, markers) that touch alpha/shadow/composite-mode, and forcing a
