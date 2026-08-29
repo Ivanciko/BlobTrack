@@ -115,6 +115,18 @@
     gap:14px;
     align-items:center;
   }
+  .reset-btn{
+    width:28px; height:28px;
+    border-radius:50%;
+    border:1px solid var(--border-bright);
+    background:var(--surface-2);
+    color:var(--text-dim);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex:none;
+  }
+  .reset-btn:hover{ border-color:var(--accent); color:var(--accent); }
   .dot{
     width:6px; height:6px; border-radius:50%;
     background:var(--text-faint);
@@ -724,6 +736,9 @@
       <span class="brand-sub">ANÁLISIS DE MOVIMIENTO · LOCAL</span>
     </div>
     <div class="topbar-right">
+      <button type="button" class="reset-btn" id="resetBtn" style="display:none;" aria-label="Elegir otro vídeo o volver a la cámara" title="Elegir otro vídeo o volver a la cámara">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      </button>
       <span id="statusText"><span class="dot" id="statusDot"></span>en espera</span>
     </div>
   </header>
@@ -2913,6 +2928,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
   // ---------- DOM ----------
   const dropzone = document.getElementById('dropzone');
   const dropzoneWrap = document.getElementById('dropzoneWrap');
+  const resetBtn = document.getElementById('resetBtn');
   const fileInput = document.getElementById('fileInput');
   const dropzoneError = document.getElementById('dropzoneError');
   const canvasWrap = document.getElementById('canvasWrap');
@@ -3306,11 +3322,24 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     await startCamera(next);
   }
 
-  function stopCamera(){
-    releaseCamera();
+  // Returns to the "choose a video / use the camera" screen from whichever mode is
+  // currently active. This is the only way back once something is loaded — the app
+  // has no browser chrome to fall back on when installed to the home screen (no
+  // address bar, no pull-to-reload), so this button has to be fully self-contained.
+  function goToDropzone(){
+    if (state.mode === 'camera'){
+      releaseCamera();
+    } else if (video.src){
+      video.pause();
+      const oldSrc = video.src;
+      video.removeAttribute('src');
+      video.load();
+      if (oldSrc.startsWith('blob:')) URL.revokeObjectURL(oldSrc);
+    }
     state.mode = 'file';
     state.playing = false;
     if (state.rafId){ cancelAnimationFrame(state.rafId); state.rafId = null; }
+    resetTracking();
     canvasWrap.style.display = 'none';
     liveControls.style.display = 'none';
     transport.style.display = 'none';
@@ -3319,6 +3348,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     exportSection.style.display = 'block';
     liveExportSection.style.display = 'none';
     exportBtn.disabled = true;
+    resetBtn.style.display = 'none';
     setStatus('en espera', false);
   }
 
@@ -3332,7 +3362,8 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
 
   cameraBtn.addEventListener('click', () => startCamera(state.facingMode));
   flipCameraBtn.addEventListener('click', flipCamera);
-  stopCameraBtn.addEventListener('click', stopCamera);
+  stopCameraBtn.addEventListener('click', goToDropzone);
+  resetBtn.addEventListener('click', goToDropzone);
 
   function fmtClock(totalSeconds){
     const m = Math.floor(totalSeconds/60), s = Math.floor(totalSeconds%60);
@@ -3471,6 +3502,7 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
     procCanvas.height = state.procH;
 
     dropzoneWrap.style.display = 'none';
+    resetBtn.style.display = 'flex';
     canvasWrap.style.display = 'block';
     resetTracking();
 
@@ -3841,7 +3873,15 @@ if (typeof module === "object" && typeof module.exports === "object") Object.ass
         const nx = b.cx * natX, ny = b.cy * natY;
         const label = nx.toFixed(4) + ', ' + ny.toFixed(4);
         const fontPx = Math.round(15 * styleScale);
-        sctx.font = '600 ' + fontPx + 'px "IBM Plex Mono", monospace';
+        // Deliberately system fonts only here (not the "IBM Plex Mono" webfont used
+        // elsewhere in the UI): Safari has a known canvas quirk where fillText with a
+        // custom @font-face that hasn't finished downloading yet can render a solid
+        // black block instead of falling back cleanly, until the font finishes
+        // loading. That race is far more likely right when a freshly uploaded video
+        // starts playing than with the camera (whose permission prompt buys the font
+        // extra time), which matches this exactly. System monospace fonts are always
+        // already available, so this sidesteps the race entirely.
+        sctx.font = '600 ' + fontPx + 'px ui-monospace, "SF Mono", Menlo, Consolas, monospace';
         sctx.textBaseline = 'top';
         const tx = px - half, ty = py + half + 6 * styleScale;
         sctx.fillStyle = params.coordColor;
